@@ -64,6 +64,14 @@ PRED_COLOURS = {
 
 TIMEOUT = 4   # seconds per API call
 
+# Data view mode → (label, telemetry URL)
+DATA_VIEW_MODES: dict[str, str] = {
+    "Latest 20":          "http://localhost:8001/telemetry/latest?limit=20",
+    "Latest 100":         "http://localhost:8001/telemetry/latest?limit=100",
+    "Latest 500":         "http://localhost:8001/telemetry/latest?limit=500",
+    "All stored records": "http://localhost:8001/telemetry/all",
+}
+
 # ─────────────────────────────────────────────
 # CUSTOM CSS  — clean academic style
 # ─────────────────────────────────────────────
@@ -278,22 +286,32 @@ with st.sidebar:
 
     st.markdown("---")
 
-    # We'll populate vehicle / severity filters after data is loaded — placeholders for now
-    veh_placeholder   = st.empty()
-    sev_placeholder   = st.empty()
+    # ── Data view mode ────────────────────────
+    st.markdown("**Data View Mode**")
+    data_view_mode = st.selectbox(
+        "Telemetry records to load",
+        options=list(DATA_VIEW_MODES.keys()),
+        index=0,
+        help=(
+            "Latest 20 / 100 / 500 — fetch only the most-recent N records.\n"
+            "All stored records — fetch everything (may be slower for large datasets)."
+        ),
+    )
+
+    st.markdown("---")
+
+    # Filters populated after data fetch
+    veh_placeholder = st.empty()
+    sev_placeholder = st.empty()
 
     st.markdown("---")
     st.markdown("**Service Ports**")
     for name, cfg in SERVICES.items():
-        st.markdown(
-            f"`{cfg['port']}` {name}",
-        )
+        st.markdown(f"`{cfg['port']}` {name}")
 
     st.markdown("---")
     st.markdown("**Swagger / API Docs**")
     for name, cfg in SERVICES.items():
-        if name != "Prediction API":   # prediction API has its own docs but same pattern
-            pass
         docs_url = f"{cfg['url']}/docs"
         st.markdown(f"[{name} docs]({docs_url})", unsafe_allow_html=False)
 
@@ -307,6 +325,8 @@ with st.sidebar:
 # FETCH ALL DATA
 # ─────────────────────────────────────────────
 
+telemetry_url = DATA_VIEW_MODES[data_view_mode]
+
 with st.spinner("Fetching live data from microservices…"):
     # — Health checks —
     health_results: dict[str, dict] = {}
@@ -319,8 +339,8 @@ with st.spinner("Fetching live data from microservices…"):
             "checked": datetime.now(timezone.utc).strftime("%H:%M:%S UTC"),
         }
 
-    # — Telemetry —
-    tel_ok, tel_data = _get("http://localhost:8001/telemetry/latest")
+    # — Telemetry (respects selected data view mode) —
+    tel_ok, tel_data = _get(telemetry_url)
     telemetry_records: list[dict] = []
     total_stored = 0
     if tel_ok and isinstance(tel_data, dict):
@@ -375,7 +395,7 @@ if not health_results["Alert Service"]["healthy"]:
 
 # ─────────────────────────────────────────────
 # SIDEBAR VEHICLE + SEVERITY FILTERS
-# (populate now that we have data)
+# (populated after data is fetched)
 # ─────────────────────────────────────────────
 
 all_vehicle_ids: list[str] = sorted(set(
@@ -397,7 +417,7 @@ with sev_placeholder:
         index=0,
     )
 
-# Apply filters
+# ── Apply filters ─────────────────────────────
 filtered_alerts = all_alerts
 if veh_filter != "ALL":
     filtered_alerts = [a for a in filtered_alerts if a.get("vehicle_id") == veh_filter]
@@ -418,24 +438,15 @@ total_alerts    = len(all_alerts)
 critical_alerts = sum(1 for a in all_alerts if a.get("severity", "").upper() == "CRITICAL")
 warning_alerts  = sum(1 for a in all_alerts if a.get("severity", "").upper() == "WARNING")
 
-# Prediction label counts from alerts
-pred_counts: dict[str, int] = {}
-diag_counts: dict[str, int] = {}
-for a in all_alerts:
-    lbl  = (a.get("prediction", {}) or {}).get("label", "")
-    dsts = (a.get("diagnostics", {}) or {}).get("status", "")
-    if lbl:  pred_counts[lbl]  = pred_counts.get(lbl, 0) + 1
-    if dsts: diag_counts[dsts] = diag_counts.get(dsts, 0) + 1
-
 kpi_cols = st.columns(6)
 
 kpis = [
-    ("Total Stored",     total_stored,              "blue",  ""),
-    ("Latest Records",   len(telemetry_records),    "blue",  ""),
-    ("Total Alerts",     total_alerts,              "blue",  ""),
-    ("Critical Alerts",  critical_alerts,           "red",   ""),
-    ("Warning Alerts",   warning_alerts,            "amber", ""),
-    ("Normal Alerts",    total_alerts - critical_alerts - warning_alerts, "green", ""),
+    ("Total Stored",     total_stored,                                             "blue",  ""),
+    ("Latest Records",   len(telemetry_records),                                  "blue",  ""),
+    ("Total Alerts",     total_alerts,                                             "blue",  ""),
+    ("Critical Alerts",  critical_alerts,                                          "red",   ""),
+    ("Warning Alerts",   warning_alerts,                                           "amber", ""),
+    ("Normal Alerts",    total_alerts - critical_alerts - warning_alerts,          "green", ""),
 ]
 
 for col, (label, value, colour, _) in zip(kpi_cols, kpis):
@@ -452,18 +463,32 @@ for col, (label, value, colour, _) in zip(kpi_cols, kpis):
 
 # ─────────────────────────────────────────────
 # CHARTS
+# (all four charts use filtered_alerts so they
+#  respond to the Vehicle ID and Severity filters)
 # ─────────────────────────────────────────────
 
 st.markdown('<div class="cv-section">Analytics</div>', unsafe_allow_html=True)
+
+# Build prediction / diagnostics counts from FILTERED alerts
+pred_counts: dict[str, int] = {}
+diag_counts: dict[str, int] = {}
+for a in filtered_alerts:
+    lbl  = (a.get("prediction", {}) or {}).get("label", "")
+    dsts = (a.get("diagnostics", {}) or {}).get("status", "")
+    if lbl:  pred_counts[lbl]  = pred_counts.get(lbl, 0) + 1
+    if dsts: diag_counts[dsts] = diag_counts.get(dsts, 0) + 1
+
+# Shown when a filter is active but produces no results
+_no_data_msg = "No alert data available for the selected filter."
 
 chart_col1, chart_col2 = st.columns(2)
 
 # ── Chart 1: Alert severity distribution ──
 with chart_col1:
     st.markdown("**Alert Severity Distribution**")
-    if all_alerts:
+    if filtered_alerts:
         sev_series = pd.Series(
-            [a.get("severity", "UNKNOWN").upper() for a in all_alerts]
+            [a.get("severity", "UNKNOWN").upper() for a in filtered_alerts]
         ).value_counts().reset_index()
         sev_series.columns = ["Severity", "Count"]
         fig1 = px.bar(
@@ -487,14 +512,15 @@ with chart_col1:
         fig1.update_traces(marker_line_width=0)
         st.plotly_chart(fig1, use_container_width=True)
     else:
-        st.info("No alert data available. Run the simulator to generate alerts.")
+        st.info(_no_data_msg if (veh_filter != "ALL" or sev_filter != "ALL") else
+                "No alert data available. Run the simulator to generate alerts.")
 
 # ── Chart 2: Vehicle-wise alert count ──
 with chart_col2:
     st.markdown("**Vehicle-wise Alert Count**")
-    if all_alerts:
+    if filtered_alerts:
         veh_series = pd.Series(
-            [a.get("vehicle_id", "UNKNOWN") for a in all_alerts]
+            [a.get("vehicle_id", "UNKNOWN") for a in filtered_alerts]
         ).value_counts().head(15).reset_index()
         veh_series.columns = ["Vehicle ID", "Alerts"]
         fig2 = px.bar(
@@ -519,7 +545,8 @@ with chart_col2:
         fig2.update_traces(marker_line_width=0)
         st.plotly_chart(fig2, use_container_width=True)
     else:
-        st.info("No alert data available.")
+        st.info(_no_data_msg if (veh_filter != "ALL" or sev_filter != "ALL") else
+                "No alert data available.")
 
 chart_col3, chart_col4 = st.columns(2)
 
@@ -549,7 +576,8 @@ with chart_col3:
         fig3.update_traces(textinfo="percent+label")
         st.plotly_chart(fig3, use_container_width=True)
     else:
-        st.info("No prediction data available yet.")
+        st.info(_no_data_msg if (veh_filter != "ALL" or sev_filter != "ALL") else
+                "No prediction data available yet.")
 
 # ── Chart 4: Diagnostics status distribution ──
 with chart_col4:
@@ -577,7 +605,8 @@ with chart_col4:
         fig4.update_traces(textinfo="percent+label")
         st.plotly_chart(fig4, use_container_width=True)
     else:
-        st.info("No diagnostics data available yet.")
+        st.info(_no_data_msg if (veh_filter != "ALL" or sev_filter != "ALL") else
+                "No diagnostics data available yet.")
 
 # ─────────────────────────────────────────────
 # LATEST TELEMETRY TABLE
@@ -590,7 +619,6 @@ if not health_results["Telemetry Service"]["healthy"]:
 elif filtered_telemetry:
     tel_df = _telemetry_df(filtered_telemetry)
     if not tel_df.empty:
-        # Colour-code fault_indicator
         def _highlight_fault(val):
             if str(val) == "1" or val == 1:
                 return "background-color: #fdf4f3; color: #c0392b; font-weight: 600;"
@@ -675,10 +703,14 @@ with st.expander("🔧 API Reference & Test Commands", expanded=False):
             ("POST", "/predict/batch",   "Batch prediction"),
         ],
         "Telemetry Service (8001)": [
-            ("GET",  "/health",                  "Health check"),
-            ("POST", "/telemetry/ingest",        "Ingest record"),
-            ("GET",  "/telemetry/latest",        "Latest 20 records"),
-            ("GET",  "/telemetry/{vehicle_id}",  "Vehicle records"),
+            ("GET",  "/health",                       "Health check"),
+            ("POST", "/telemetry/ingest",             "Ingest record"),
+            ("GET",  "/telemetry/latest?limit=20",    "Latest 20 records (default)"),
+            ("GET",  "/telemetry/latest?limit=100",   "Latest 100 records"),
+            ("GET",  "/telemetry/latest?limit=500",   "Latest 500 records"),
+            ("GET",  "/telemetry/all",                "All stored records"),
+            ("GET",  "/telemetry/count",              "Record count only"),
+            ("GET",  "/telemetry/{vehicle_id}",       "Vehicle records"),
         ],
         "Diagnostics Service (8002)": [
             ("GET",  "/health",                  "Health check"),
@@ -686,9 +718,9 @@ with st.expander("🔧 API Reference & Test Commands", expanded=False):
         ],
         "Alert Service (8003)": [
             ("GET",    "/health",               "Health check"),
-            ("GET",    "/alerts",              "All alerts"),
-            ("GET",    "/alerts/{vehicle_id}", "Vehicle alerts"),
-            ("DELETE", "/alerts/clear",        "Clear alerts"),
+            ("GET",    "/alerts",               "All alerts"),
+            ("GET",    "/alerts/{vehicle_id}",  "Vehicle alerts"),
+            ("DELETE", "/alerts/clear",         "Clear alerts"),
         ],
     }
 
@@ -711,12 +743,20 @@ with st.expander("🔧 API Reference & Test Commands", expanded=False):
         "curl http://localhost:8003/health\n\n"
         "# View alerts\n"
         "curl http://localhost:8003/alerts | python3 -m json.tool\n\n"
-        "# Latest telemetry\n"
-        "curl http://localhost:8001/telemetry/latest | python3 -m json.tool\n\n"
+        "# Latest telemetry (various limits)\n"
+        "curl http://localhost:8001/telemetry/latest | python3 -m json.tool\n"
+        "curl 'http://localhost:8001/telemetry/latest?limit=100' | python3 -m json.tool\n"
+        "curl 'http://localhost:8001/telemetry/latest?limit=500' | python3 -m json.tool\n\n"
+        "# All stored records\n"
+        "curl http://localhost:8001/telemetry/all | python3 -m json.tool\n\n"
+        "# Record count only\n"
+        "curl http://localhost:8001/telemetry/count | python3 -m json.tool\n\n"
         "# Clear alerts\n"
         "curl -X DELETE http://localhost:8003/alerts/clear\n\n"
         "# Run simulator\n"
-        "python3 scripts/telemetry_simulator.py --limit 25",
+        "python3 scripts/telemetry_simulator.py --limit 25\n"
+        "python3 scripts/telemetry_simulator.py --limit 500 --delay 0.05 --balanced-vehicles\n"
+        "python3 scripts/telemetry_simulator.py --limit 0 --delay 0.01 --shuffle",
         language="bash",
     )
 
@@ -735,6 +775,7 @@ st.markdown(
     <div class="cv-footer">
         Cybervehicare · Phase 6 Dashboard &nbsp;|&nbsp;
         Last refreshed: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')} &nbsp;|&nbsp;
+        Data view: {data_view_mode} &nbsp;|&nbsp;
         Serving NGOs and Government Agencies
     </div>
     """,

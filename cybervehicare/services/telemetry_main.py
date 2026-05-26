@@ -115,8 +115,8 @@ async def _call_diagnostics(record: dict, prediction: dict) -> dict:
 async def _call_alert(record: dict, prediction: dict, diagnostics: dict) -> dict:
     """POST to Alert Service; returns full response dict or error stub."""
     payload = {
-        "telemetry": record,
-        "prediction": prediction,
+        **record,
+        "prediction":  prediction,
         "diagnostics": diagnostics,
     }
     try:
