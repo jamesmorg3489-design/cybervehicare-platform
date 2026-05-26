@@ -1,0 +1,13 @@
+Cybervehicare — Phase 3 Classification Report
+Generated : 2026-05-26T17:56:32.992153Z
+============================================================
+
+              precision    recall  f1-score   support
+
+      NORMAL     1.0000    1.0000    1.0000       765
+     WARNING     1.0000    1.0000    1.0000       726
+    CRITICAL     1.0000    1.0000    1.0000       525
+
+    accuracy                         1.0000      2016
+   macro avg     1.0000    1.0000    1.0000      2016
+weighted avg     1.0000    1.0000    1.0000      2016
