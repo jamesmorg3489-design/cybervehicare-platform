@@ -1,0 +1,192 @@
+version: "3.9"
+
+# =============================================================
+# CyberVehicare - Vehicle Health Monitoring Framework
+# Microservices Platform for NGOs and Government Agencies
+# Run with: docker compose up --build
+# =============================================================
+
+networks:
+  cybervehicare_net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  prometheus_data:
+
+services:
+
+  # ── DATABASE ─────────────────────────────────────────────
+  vehicle_db:
+    image: postgres:16
+    container_name: vehicle_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-vehicle_health}
+      POSTGRES_USER: ${POSTGRES_USER:-cvuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cvpass}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/init_db.sql
+    networks:
+      - cybervehicare_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cvuser}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── API GATEWAY ──────────────────────────────────────────
+  gateway:
+    build: ./services/gateway
+    container_name: gateway
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - TELEMETRY_URL=http://telemetry:8001
+      - DIAGNOSTICS_URL=http://diagnostics:8002
+      - PREDICTION_URL=http://prediction:8003
+      - ALERT_URL=http://alert:8004
+      - JWT_SECRET=${JWT_SECRET:-supersecretkey}
+    depends_on:
+      - telemetry
+      - diagnostics
+      - prediction
+      - alert
+    networks:
+      - cybervehicare_net
+
+  # ── TELEMETRY SERVICE ─────────────────────────────────────
+  telemetry:
+    build: ./services/telemetry
+    container_name: telemetry
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-cvuser}:${POSTGRES_PASSWORD:-cvpass}@vehicle_db:5432/${POSTGRES_DB:-vehicle_health}
+      - SERVICE_PORT=8001
+    depends_on:
+      vehicle_db:
+        condition: service_healthy
+    volumes:
+      - ./data:/app/data
+    networks:
+      - cybervehicare_net
+
+  # ── DIAGNOSTICS SERVICE ───────────────────────────────────
+  diagnostics:
+    build: ./services/diagnostics
+    container_name: diagnostics
+    restart: unless-stopped
+    ports:
+      - "8002:8002"
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-cvuser}:${POSTGRES_PASSWORD:-cvpass}@vehicle_db:5432/${POSTGRES_DB:-vehicle_health}
+      - SERVICE_PORT=8002
+    depends_on:
+      vehicle_db:
+        condition: service_healthy
+    networks:
+      - cybervehicare_net
+
+  # ── PREDICTION SERVICE (ML) ───────────────────────────────
+  prediction:
+    build: ./services/prediction
+    container_name: prediction
+    restart: unless-stopped
+    ports:
+      - "8003:8003"
+    environment:
+      - SERVICE_PORT=8003
+      - MODEL_PATH=/app/model
+    volumes:
+      - ./ml/model:/app/model
+    networks:
+      - cybervehicare_net
+
+  # ── ALERT SERVICE ─────────────────────────────────────────
+  alert:
+    build: ./services/alert
+    container_name: alert
+    restart: unless-stopped
+    ports:
+      - "8004:8004"
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-cvuser}:${POSTGRES_PASSWORD:-cvpass}@vehicle_db:5432/${POSTGRES_DB:-vehicle_health}
+      - SERVICE_PORT=8004
+    depends_on:
+      vehicle_db:
+        condition: service_healthy
+    networks:
+      - cybervehicare_net
+
+  # ── DASHBOARD ─────────────────────────────────────────────
+  dashboard:
+    build: ./services/dashboard
+    container_name: dashboard
+    restart: unless-stopped
+    ports:
+      - "8501:8501"
+    environment:
+      - GATEWAY_URL=http://gateway:8000
+      - TELEMETRY_URL=http://telemetry:8001
+      - DIAGNOSTICS_URL=http://diagnostics:8002
+      - ALERT_URL=http://alert:8004
+    depends_on:
+      - gateway
+    networks:
+      - cybervehicare_net
+
+  # ── MONOLITHIC BASELINE ───────────────────────────────────
+  monolith:
+    build: ./monolith
+    container_name: monolith
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-cvuser}:${POSTGRES_PASSWORD:-cvpass}@vehicle_db:5432/${POSTGRES_DB:-vehicle_health}
+      - SERVICE_PORT=9000
+    depends_on:
+      vehicle_db:
+        condition: service_healthy
+    volumes:
+      - ./data:/app/data
+      - ./ml/model:/app/model
+    networks:
+      - cybervehicare_net
+
+  # ── PROMETHEUS ────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    networks:
+      - cybervehicare_net
+
+  # ── TELEMETRY SIMULATOR (seeds data then exits) ───────────
+  simulator:
+    build: ./services/telemetry
+    container_name: simulator
+    command: python simulator.py
+    environment:
+      - TELEMETRY_URL=http://telemetry:8001
+      - RECORDS_PER_BATCH=50
+      - INTERVAL_SECONDS=2
+    depends_on:
+      - telemetry
+    volumes:
+      - ./data:/app/data
+    networks:
+      - cybervehicare_net
+    profiles:
+      - simulate

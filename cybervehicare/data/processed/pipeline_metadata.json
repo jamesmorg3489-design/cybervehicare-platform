@@ -1,0 +1,75 @@
+{
+  "label_map": {
+    "NORMAL": 0,
+    "WARNING": 1,
+    "CRITICAL": 2
+  },
+  "label_order": [
+    "NORMAL",
+    "WARNING",
+    "CRITICAL"
+  ],
+  "categorical_encoders": {
+    "organisation_type": {
+      "Emergency Service": 0,
+      "Government Agency": 1,
+      "Local Authority": 2,
+      "NGO": 3
+    },
+    "vehicle_type": {
+      "Ambulance": 0,
+      "Community Outreach Vehicle": 1,
+      "Emergency Response Vehicle": 2,
+      "Field Inspection Vehicle": 3,
+      "Medical Van": 4
+    },
+    "failure_type": {
+      "Battery Dead": 0,
+      "Battery Drain": 1,
+      "Brake Overheat": 2,
+      "Brake Pad Worn": 3,
+      "Engine Overheat": 4,
+      "Excessive Vibration": 5,
+      "Low Battery Voltage": 6,
+      "Low Brake Fluid": 7,
+      "Low Oil Pressure": 8,
+      "No Failure": 9
+    }
+  },
+  "feature_columns": [
+    "odometer_reading",
+    "engine_temp_c",
+    "engine_rpm",
+    "oil_pressure_psi",
+    "coolant_temp_c",
+    "fuel_level_percent",
+    "fuel_consumption_lph",
+    "vibration_level",
+    "engine_hours",
+    "brake_fluid_level_psi",
+    "brake_pad_wear_mm",
+    "brake_temp_c",
+    "abs_fault_indicator",
+    "battery_voltage_v",
+    "battery_current_a",
+    "battery_temp_c",
+    "battery_charge_percent",
+    "battery_health_percent",
+    "vehicle_speed_kph",
+    "tyre_pressure_psi",
+    "fault_indicator",
+    "engine_failure_imminent",
+    "brake_issue_imminent",
+    "battery_issue_imminent",
+    "organisation_type_enc",
+    "vehicle_type_enc",
+    "failure_type_enc",
+    "engine_temp_rpm_ratio",
+    "battery_stress_index",
+    "brake_wear_heat_ratio",
+    "fuel_efficiency_score",
+    "combined_failure_risk"
+  ],
+  "target_column": "maintenance_status",
+  "generated_at": "2026-05-26T17:42:53.322441Z"
+}

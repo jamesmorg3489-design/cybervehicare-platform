@@ -1,0 +1,185 @@
+# CyberVehicare — Vehicle Health Monitoring Framework
+
+> **Dissertation Project** | Microservices Platforms for NGOs and Government Agencies  
+> MSc Dissertation | Candidate: *[Your Name]* | Due: August 2026
+
+---
+
+## Overview
+
+CyberVehicare is a cloud-native microservices reference platform for vehicle health monitoring,
+predictive maintenance, and real-time anomaly detection. It is designed for NGO and government
+fleets and demonstrates scalability, resilience, and observability advantages over monolithic
+architectures.
+
+---
+
+## Quick Start (GitHub Codespaces / Docker)
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/YOUR_USERNAME/cybervehicare.git
+cd cybervehicare
+
+# 2. Copy environment file
+cp .env.example .env
+
+# 3. Train the ML model (first time only — takes ~60 seconds)
+docker compose run --rm prediction python train.py
+
+# 4. Start the full platform
+docker compose up --build
+
+# 5. (Optional) Start telemetry simulator
+docker compose --profile simulate up simulator
+```
+
+### Service URLs (after startup)
+
+| Service | URL | Description |
+|---|---|---|
+| Dashboard | http://localhost:8501 | Streamlit fleet monitoring UI |
+| API Gateway | http://localhost:8000 | Secure entry point (JWT) |
+| Telemetry | http://localhost:8001 | Ingestion & storage |
+| Diagnostics | http://localhost:8002 | Rule-based health scoring |
+| Prediction | http://localhost:8003 | ML fault prediction (FastAPI) |
+| Alert | http://localhost:8004 | Alert generation & history |
+| Monolith | http://localhost:9000 | Baseline comparison service |
+| Prometheus | http://localhost:9090 | Metrics & monitoring |
+
+---
+
+## Project Structure
+
+```
+cybervehicare/
+├── data/                        # Dataset
+│   └── vehicle_telemetry.csv   # 13,439 records (Kaggle)
+├── ml/                          # Machine learning
+│   ├── train.py                 # Model training script
+│   ├── preprocess.py            # Feature engineering
+│   └── model/                   # Saved model artefacts
+├── services/
+│   ├── gateway/                 # API Gateway (FastAPI + JWT)
+│   ├── telemetry/               # Telemetry ingestion (FastAPI)
+│   │   └── simulator.py         # Sends synthetic telemetry
+│   ├── diagnostics/             # Rule-based diagnostics (FastAPI)
+│   ├── prediction/              # ML prediction service (FastAPI)
+│   ├── alert/                   # Alert management (FastAPI)
+│   └── dashboard/               # Streamlit dashboard
+├── monolith/                    # Monolithic baseline (FastAPI)
+├── benchmark/
+│   ├── run_benchmark.py         # Latency, throughput, scalability
+│   ├── fault_injection.py       # Fault injection test
+│   └── results/                 # CSV results + graphs
+├── monitoring/
+│   └── prometheus.yml           # Prometheus scrape config
+├── scripts/
+│   └── init_db.sql              # Database schema
+├── docs/
+│   └── evidence/                # Screenshots & evidence checklist
+├── docker-compose.yml
+├── .env.example
+└── README.md
+```
+
+---
+
+## Research Questions Addressed
+
+| RQ | Focus | Implementation |
+|---|---|---|
+| RQ1 | Secure real-time telemetry ingestion | Gateway + Telemetry + JWT |
+| RQ2 | Microservices vs monolithic performance | Benchmark scripts |
+| RQ3 | Predictive maintenance effectiveness | RandomForest/XGBoost ML model |
+| RQ4 | Observability & security trustworthiness | Prometheus + JWT gateway |
+
+---
+
+## Dataset
+
+- **Source:** Kaggle vehicle maintenance telemetry dataset
+- **Records:** 13,439
+- **Target:** `maintenance_status` — NORMAL / WARNING / CRITICAL
+- **Features:** engine_temp_c, battery_voltage_v, oil_pressure_psi, tyre_pressure_psi,
+  vibration_level, fuel_level_percent, brake_pad_wear_mm, and 20+ others
+- **Organisation types:** Government Agency, Emergency Service, NGO, Local Authority
+
+---
+
+## Architecture
+
+```
+                        ┌──────────────────────────────────────┐
+   Vehicles / CSV ───►  │          API Gateway :8000           │
+   Simulator            │  (JWT Auth, Rate Limit, Routing)     │
+                        └──────┬─────┬────────┬──────┬────────┘
+                               │     │        │      │
+                          ┌────┘  ┌──┘    ┌───┘  ┌───┘
+                          ▼       ▼        ▼      ▼
+                     Telemetry Diagnostics Pred  Alert
+                      :8001    :8002      :8003  :8004
+                          │       │        │      │
+                          └───────┴────────┴──────┘
+                                       │
+                               ┌───────▼───────┐
+                               │  PostgreSQL DB │
+                               │    :5432       │
+                               └───────────────┘
+                                       │
+                               ┌───────▼───────┐
+                               │  Dashboard    │
+                               │  :8501        │
+                               └───────────────┘
+```
+
+---
+
+## Benchmark Results (Summary)
+
+> Results generated by `benchmark/run_benchmark.py` after `docker compose up`.
+
+See `benchmark/results/` for full CSV data and graphs.
+
+---
+
+## Evidence Checklist
+
+See `docs/evidence/CHECKLIST.md` for the full screenshot and evidence list required
+for dissertation submission.
+
+---
+
+## Technology Stack
+
+| Layer | Technology |
+|---|---|
+| Microservices | Python FastAPI |
+| ML Prediction | scikit-learn (RandomForest + XGBoost) |
+| Dashboard | Streamlit |
+| Database | PostgreSQL 16 |
+| Containerisation | Docker + Docker Compose |
+| Monitoring | Prometheus |
+| Security | JWT (python-jose) |
+| Benchmarking | requests, concurrent.futures, matplotlib |
+| Dataset | Kaggle (13,439 vehicle telemetry records) |
+
+---
+
+## Phase Completion
+
+- [x] Phase 1 — Project structure
+- [ ] Phase 2 — Dataset pipeline
+- [ ] Phase 3 — ML model training
+- [ ] Phase 4 — Telemetry simulator
+- [ ] Phase 5 — Microservices backend
+- [ ] Phase 6 — Database schema
+- [ ] Phase 7 — Dashboard
+- [ ] Phase 8 — Docker build
+- [ ] Phase 9 — Prometheus monitoring
+- [ ] Phase 10 — Monolithic baseline
+- [ ] Phase 11 — Benchmark tests
+- [ ] Phase 12 — Fault injection
+- [ ] Phase 13 — Result graphs
+- [ ] Phase 14 — Evidence folder
+- [ ] Phase 15 — Technical documentation

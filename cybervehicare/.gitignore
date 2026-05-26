@@ -1,0 +1,14 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.DS_Store
+ml/model/*.pkl
+ml/model/*.joblib
+ml/model/*.h5
+benchmark/results/*.png
+benchmark/results/*.csv
+docs/evidence/*.png
+postgres_data/
+prometheus_data/
