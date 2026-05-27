@@ -1,28 +1,24 @@
 global:
-  scrape_interval: 15s
-  evaluation_interval: 15s
+  scrape_interval: 5s
+  evaluation_interval: 5s
 
 scrape_configs:
-  - job_name: 'gateway'
+  - job_name: "prediction-api"
+    metrics_path: "/metrics"
     static_configs:
-      - targets: ['gateway:8000']
+      - targets: ["prediction:8000"]
 
-  - job_name: 'telemetry'
+  - job_name: "telemetry-service"
+    metrics_path: "/metrics"
     static_configs:
-      - targets: ['telemetry:8001']
+      - targets: ["telemetry:8001"]
 
-  - job_name: 'diagnostics'
+  - job_name: "diagnostics-service"
+    metrics_path: "/metrics"
     static_configs:
-      - targets: ['diagnostics:8002']
+      - targets: ["diagnostics:8002"]
 
-  - job_name: 'prediction'
+  - job_name: "alert-service"
+    metrics_path: "/metrics"
     static_configs:
-      - targets: ['prediction:8003']
-
-  - job_name: 'alert'
-    static_configs:
-      - targets: ['alert:8004']
-
-  - job_name: 'monolith'
-    static_configs:
-      - targets: ['monolith:9000']
+      - targets: ["alert:8003"]

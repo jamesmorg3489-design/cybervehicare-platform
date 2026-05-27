@@ -1,4 +1,4 @@
-# Cybervehicare — Phase 7 Docker / Containerisation Test Commands
+docker compose ps# Cybervehicare — Phase 7 Docker / Containerisation Test Commands
 
 **Phase 7: Docker Containerisation**  
 Complete commands to build, run, verify, and demonstrate the fully-Dockerised

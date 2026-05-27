@@ -40,6 +40,7 @@ from typing import Any, Optional
 
 import httpx
 from fastapi import FastAPI, HTTPException, Query
+from prometheus_fastapi_instrumentator import Instrumentator
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -391,3 +392,12 @@ async def vehicle_telemetry(vehicle_id: str):
         "returned":     len(matched),
         "records":      matched,
     }
+
+# ─────────────────────────────────────────────
+# PROMETHEUS METRICS
+# ─────────────────────────────────────────────
+try:
+    Instrumentator().instrument(app).expose(app, endpoint="/metrics")
+except Exception as exc:
+    print(f"Prometheus metrics setup skipped: {exc}")
+

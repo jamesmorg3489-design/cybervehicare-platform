@@ -141,3 +141,21 @@ services:
       timeout: 10s
       retries: 5
       start_period: 20s
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: cybervehicare_prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      prediction:
+        condition: service_healthy
+      telemetry:
+        condition: service_healthy
+      diagnostics:
+        condition: service_healthy
+      alert:
+        condition: service_healthy
+

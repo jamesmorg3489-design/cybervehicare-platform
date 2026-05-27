@@ -45,7 +45,9 @@ RUN pip install --no-cache-dir --upgrade pip \
         "streamlit>=1.35.0" \
         "plotly>=5.22.0" \
         # ── Utilities ──
-        "python-multipart>=0.0.9"
+        "python-multipart>=0.0.9" \
+    "prometheus-fastapi-instrumentator>=7.0.0" \
+    "prometheus-client>=0.20.0"
 
 # ── Source code ───────────────────────────────────────────────
 # The full repo is bind-mounted at runtime via docker-compose

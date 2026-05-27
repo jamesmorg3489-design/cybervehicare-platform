@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import FastAPI
+from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel
 
 logging.basicConfig(
@@ -196,3 +197,12 @@ def evaluate(payload: TelemetryPayload):
         "messages":           result["messages"],
         "timestamp":          datetime.now(timezone.utc).isoformat(),
     }
+
+# ─────────────────────────────────────────────
+# PROMETHEUS METRICS
+# ─────────────────────────────────────────────
+try:
+    Instrumentator().instrument(app).expose(app, endpoint="/metrics")
+except Exception as exc:
+    print(f"Prometheus metrics setup skipped: {exc}")
+

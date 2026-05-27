@@ -49,6 +49,7 @@ import numpy as np
 import pandas as pd
 import uvicorn
 from fastapi import FastAPI, HTTPException
+from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel, Field
 
 warnings.filterwarnings("ignore")
@@ -589,3 +590,12 @@ if __name__ == "__main__":
         reload  =True,
         log_level="info",
     )
+
+# ─────────────────────────────────────────────
+# PROMETHEUS METRICS
+# ─────────────────────────────────────────────
+try:
+    Instrumentator().instrument(app).expose(app, endpoint="/metrics")
+except Exception as exc:
+    print(f"Prometheus metrics setup skipped: {exc}")
+
