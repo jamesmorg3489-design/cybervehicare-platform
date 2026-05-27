@@ -1,0 +1,6 @@
+architecture,endpoint,request_load,total_requests,successful_requests,error_count,success_rate_percent,avg_latency_ms,p95_latency_ms,min_latency_ms,max_latency_ms,throughput_requests_per_second,total_time_seconds
+monolith,http://localhost:8010/ingest,10,10,10,0,100.0,307.808,1210.74,92.656,2095.805,3.249,3.078
+monolith,http://localhost:8010/ingest,50,50,50,0,100.0,108.064,135.324,91.334,149.508,9.253,5.404
+monolith,http://localhost:8010/ingest,100,100,100,0,100.0,105.43,140.015,91.782,192.867,9.484,10.544
+monolith,http://localhost:8010/ingest,500,500,500,0,100.0,105.268,135.696,90.22,230.122,9.499,52.636
+monolith,http://localhost:8010/ingest,1000,1000,1000,0,100.0,109.698,141.536,91.391,403.298,9.115,109.704

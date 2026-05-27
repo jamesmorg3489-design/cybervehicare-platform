@@ -1,0 +1,6 @@
+architecture,endpoint,request_load,total_requests,successful_requests,error_count,success_rate_percent,avg_latency_ms,p95_latency_ms,min_latency_ms,max_latency_ms,throughput_requests_per_second,total_time_seconds
+microservices,http://localhost:8001/telemetry/ingest,10,10,10,0,100.0,127.325,228.803,90.948,278.921,7.854,1.273
+microservices,http://localhost:8001/telemetry/ingest,50,50,50,0,100.0,111.546,140.612,89.422,180.24,8.965,5.578
+microservices,http://localhost:8001/telemetry/ingest,100,100,100,0,100.0,112.134,148.316,89.383,195.707,8.918,11.214
+microservices,http://localhost:8001/telemetry/ingest,500,500,500,0,100.0,112.786,151.498,89.686,302.462,8.866,56.396
+microservices,http://localhost:8001/telemetry/ingest,1000,1000,1000,0,100.0,112.244,151.592,89.415,234.372,8.909,112.25
