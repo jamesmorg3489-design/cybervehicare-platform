@@ -159,3 +159,23 @@ services:
       alert:
         condition: service_healthy
 
+  monolith:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cybervehicare_monolith
+    command: python3 -m uvicorn monolith.main:app --host 0.0.0.0 --port 8010
+    ports:
+      - "8010:8010"
+    volumes:
+      - .:/app
+    environment:
+      - PYTHONUNBUFFERED=1
+      - MODEL_PATH=ml/models/maintenance_model.pkl
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8010/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
