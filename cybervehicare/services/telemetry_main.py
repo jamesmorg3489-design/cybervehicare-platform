@@ -4,22 +4,12 @@ Cybervehicare — Vehicle Health Monitoring Framework
 Telemetry Service
 =============================================================
 File path  : services/telemetry/main.py
-Port       : 8001
-Run command (local):
-    python3 -m uvicorn services.telemetry.main:app \
-        --host 0.0.0.0 --port 8001 --reload
 
-Run command (Docker):
-    Handled by docker-compose.yml — environment variables
-    PREDICTION_URL, DIAGNOSTICS_URL, ALERT_URL are injected
-    automatically.
-
-Flow for POST /telemetry/ingest:
-  1. Store telemetry in memory
-  2. POST <PREDICTION_URL>   (Prediction API)
-  3. POST <DIAGNOSTICS_URL>  (Diagnostics Service)
-  4. POST <ALERT_URL>        (Alert Service)
-  5. Return combined response
+Orchestrates the full ingest pipeline:
+    POST /telemetry/ingest
+        → Prediction API   (http://localhost:8000/predict)
+        → Diagnostics Svc  (http://localhost:8002/diagnostics/evaluate)
+        → Alert Service    (http://localhost:8003/alerts)
 
 Telemetry endpoints
 -------------------
@@ -32,8 +22,7 @@ Telemetry endpoints
 
 from __future__ import annotations
 
-import os
-import logging
+import uuid
 from collections import deque
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -43,45 +32,14 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s  [%(levelname)s]  %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
-log = logging.getLogger("cybervehicare.telemetry")
-
-# ─────────────────────────────────────────────
-# SERVICE URLS
-# Environment variables are used when running inside Docker
-# (injected by docker-compose.yml).  Localhost defaults are used
-# for plain local development so existing Phase 5 commands still work.
-# ─────────────────────────────────────────────
-
-PREDICTION_URL  = os.getenv("PREDICTION_URL",  "http://localhost:8000/predict")
-DIAGNOSTICS_URL = os.getenv("DIAGNOSTICS_URL", "http://localhost:8002/diagnostics/evaluate")
-ALERT_URL       = os.getenv("ALERT_URL",       "http://localhost:8003/alerts/create")
-
-TIMEOUT = 5.0   # seconds per downstream call
-
-# ─────────────────────────────────────────────
-# IN-MEMORY STORE  (20 000 records, oldest dropped first)
-# ─────────────────────────────────────────────
-
-_telemetry_store: deque[dict[str, Any]] = deque(maxlen=20_000)
-
 # ─────────────────────────────────────────────
 # APP SETUP
 # ─────────────────────────────────────────────
 
 app = FastAPI(
     title="Cybervehicare Telemetry Service",
-    description=(
-        "Ingests vehicle telemetry and orchestrates prediction, "
-        "diagnostics, and alerting."
-    ),
+    description="Ingests vehicle telemetry and orchestrates prediction, diagnostics, and alerting.",
     version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
 )
 
 app.add_middleware(
@@ -93,79 +51,38 @@ app.add_middleware(
 )
 
 # ─────────────────────────────────────────────
+# IN-MEMORY STORE  (increased to 20 000 records)
+# ─────────────────────────────────────────────
+
+_telemetry_store: deque[dict] = deque(maxlen=20_000)
+
+# ─────────────────────────────────────────────
+# SERVICE URLS
+# ─────────────────────────────────────────────
+
+PREDICTION_URL  = "http://localhost:8000/predict"
+DIAGNOSTICS_URL = "http://localhost:8002/diagnostics/evaluate"
+ALERT_URL       = "http://localhost:8003/alerts/create"
+TIMEOUT = 5.0   # seconds per downstream call
+
+# ─────────────────────────────────────────────
 # SCHEMAS
 # ─────────────────────────────────────────────
 
 class TelemetryRecord(BaseModel):
-    vehicle_id:              str   = "UNKNOWN"
-    timestamp:               str   = ""
-    odometer_reading:        float = 0.0
-    engine_temp_c:           float = 90.0
-    engine_rpm:              float = 1000.0
-    oil_pressure_psi:        float = 40.0
-    coolant_temp_c:          float = 85.0
-    fuel_level_percent:      float = 50.0
-    fuel_consumption_lph:    float = 6.0
-    vibration_level:         float = 0.5
-    engine_hours:            float = 1000.0
-    brake_fluid_level_psi:   float = 900.0
-    brake_pad_wear_mm:       float = 5.0
-    brake_temp_c:            float = 80.0
-    abs_fault_indicator:     float = 0.0
-    battery_voltage_v:       float = 12.5
-    battery_current_a:       float = 10.0
-    battery_temp_c:          float = 25.0
-    battery_charge_percent:  float = 80.0
-    battery_health_percent:  float = 90.0
-    vehicle_speed_kph:       float = 0.0
-    gps_latitude:            float = 0.0
-    gps_longitude:           float = 0.0
-    engine_failure_imminent: float = 0.0
-    brake_issue_imminent:    float = 0.0
-    battery_issue_imminent:  float = 0.0
-    failure_type:            str   = "No Failure"
-    organisation_type:       str   = "Government Agency"
-    vehicle_type:            str   = "Community Outreach Vehicle"
-    tyre_pressure_psi:       float = 30.0
-    fault_indicator:         float = 0.0
-    maintenance_status:      str   = ""
+    vehicle_id:           Optional[str]   = None
+    timestamp:            Optional[str]   = None
+    engine_temp_c:        Optional[float] = None
+    battery_voltage_v:    Optional[float] = None
+    fuel_level_percent:   Optional[float] = None
+    tyre_pressure_psi:    Optional[float] = None
+    oil_pressure_psi:     Optional[float] = None
+    fault_indicator:      Optional[int]   = None
+    maintenance_status:   Optional[str]   = None
+    model_class:          Optional[Any]   = None   # extra columns are absorbed
 
-    model_config = {"extra": "allow"}
-
-
-# ─────────────────────────────────────────────
-# STARTUP BANNER
-# ─────────────────────────────────────────────
-
-@app.on_event("startup")
-async def startup_event():
-    print()
-    print("═" * 62)
-    print("  CYBERVEHICARE · TELEMETRY SERVICE")
-    print(f"  {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
-    print("═" * 62)
-    print()
-    print("  Telemetry Service running on port 8001 ✓")
-    print()
-    print("  Downstream URLs (env-var overridable):")
-    print(f"    PREDICTION_URL  = {PREDICTION_URL}")
-    print(f"    DIAGNOSTICS_URL = {DIAGNOSTICS_URL}")
-    print(f"    ALERT_URL       = {ALERT_URL}")
-    print()
-    print("  Pipeline: Telemetry → Prediction → Diagnostics → Alert")
-    print()
-    print("  Endpoints:")
-    print("    GET  /                          → service info")
-    print("    GET  /health                    → health check")
-    print("    POST /telemetry/ingest          → ingest + full pipeline")
-    print("    GET  /telemetry/latest?limit=N  → last N records (default 20)")
-    print("    GET  /telemetry/all             → all stored records")
-    print("    GET  /telemetry/count           → record count only")
-    print("    GET  /telemetry/{vehicle_id}    → records by vehicle")
-    print()
-    print("  Docs: http://localhost:8001/docs")
-    print("═" * 62)
-    print()
+    class Config:
+        extra = "allow"
 
 
 # ─────────────────────────────────────────────
@@ -180,7 +97,6 @@ async def _call_prediction(record: dict) -> dict:
             resp.raise_for_status()
             return resp.json()
     except Exception as exc:
-        log.error(f"[TELEMETRY] Prediction API error: {exc}")
         return {"error": str(exc), "prediction_label": "UNKNOWN", "confidence": None}
 
 
@@ -193,14 +109,13 @@ async def _call_diagnostics(record: dict, prediction: dict) -> dict:
             resp.raise_for_status()
             return resp.json()
     except Exception as exc:
-        log.error(f"[TELEMETRY] Diagnostics Service error: {exc}")
         return {"error": str(exc), "diagnostics_status": "UNKNOWN", "rules_triggered": []}
 
 
 async def _call_alert(record: dict, prediction: dict, diagnostics: dict) -> dict:
     """POST to Alert Service; returns full response dict or error stub."""
     payload = {
-        "telemetry":   record,
+        **record,
         "prediction":  prediction,
         "diagnostics": diagnostics,
     }
@@ -210,7 +125,6 @@ async def _call_alert(record: dict, prediction: dict, diagnostics: dict) -> dict
             resp.raise_for_status()
             return resp.json()
     except Exception as exc:
-        log.error(f"[TELEMETRY] Alert Service error: {exc}")
         return {"error": str(exc), "alert_created": False}
 
 
@@ -218,18 +132,12 @@ async def _call_alert(record: dict, prediction: dict, diagnostics: dict) -> dict
 # ROUTES
 # ─────────────────────────────────────────────
 
-@app.get("/", summary="Service Information")
+@app.get("/")
 async def root():
     return {
-        "service":        "Cybervehicare Telemetry Service",
-        "version":        "1.0.0",
-        "status":         "running",
-        "total_stored":   len(_telemetry_store),
-        "downstream": {
-            "prediction":  PREDICTION_URL,
-            "diagnostics": DIAGNOSTICS_URL,
-            "alert":       ALERT_URL,
-        },
+        "service": "Cybervehicare Telemetry Service",
+        "version": "1.0.0",
+        "status":  "running",
         "endpoints": [
             "GET  /health",
             "POST /telemetry/ingest",
@@ -241,7 +149,7 @@ async def root():
     }
 
 
-@app.get("/health", summary="Health Check")
+@app.get("/health")
 async def health():
     return {
         "status":        "healthy",
@@ -253,15 +161,15 @@ async def health():
 
 # ── POST /telemetry/ingest ───────────────────
 
-@app.post("/telemetry/ingest", summary="Ingest Telemetry Record (Full Pipeline)")
+@app.post("/telemetry/ingest")
 async def ingest(record: TelemetryRecord):
     """
     Ingest a single telemetry record, run the full pipeline, and return results.
     """
     raw: dict = record.model_dump()
-    raw["_ingested_at"] = datetime.now(timezone.utc).isoformat()
 
-    vehicle_id = raw.get("vehicle_id", "UNKNOWN")
+    # Stamp ingestion time
+    raw["_ingested_at"] = datetime.now(timezone.utc).isoformat()
 
     # ── Pipeline ─────────────────────────────
     prediction  = await _call_prediction(raw)
@@ -277,15 +185,8 @@ async def ingest(record: TelemetryRecord):
     }
     _telemetry_store.append(stored_record)
 
-    log.info(
-        f"[TELEMETRY] Ingested vehicle={vehicle_id}  "
-        f"prediction={prediction.get('prediction_label')}  "
-        f"diagnostics={diagnostics.get('diagnostics_status')}  "
-        f"store_size={len(_telemetry_store)}"
-    )
-
-    # ── Flat convenience fields for simulator compatibility ──
-    pred_label = (
+    # ── Flat fields for simulator compatibility ──
+    pred_label  = (
         prediction.get("prediction_label")
         or (prediction.get("prediction") or {}).get("prediction_label")
         or "UNKNOWN"
@@ -311,7 +212,7 @@ async def ingest(record: TelemetryRecord):
         "alert_raised":       alert_created,
         "alert_created":      alert_created,
         # Meta
-        "vehicle_id":         vehicle_id,
+        "vehicle_id":         raw.get("vehicle_id"),
         "ingested_at":        raw["_ingested_at"],
         "total_stored":       len(_telemetry_store),
     }
@@ -319,25 +220,21 @@ async def ingest(record: TelemetryRecord):
 
 # ── GET /telemetry/latest ────────────────────
 
-@app.get("/telemetry/latest", summary="Latest N Telemetry Records")
+@app.get("/telemetry/latest")
 async def latest_telemetry(
-    limit: int = Query(
-        default=20,
-        ge=1,
-        description="Number of most-recent records to return",
-    ),
+    limit: int = Query(default=20, ge=1, description="Number of most-recent records to return"),
 ):
     """
     Return the most-recent *limit* records.
 
     Examples
     --------
-      GET /telemetry/latest            → last 20 records
-      GET /telemetry/latest?limit=100  → last 100 records
-      GET /telemetry/latest?limit=500  → last 500 records
+      GET /telemetry/latest          → last 20 records
+      GET /telemetry/latest?limit=100 → last 100 records
+      GET /telemetry/latest?limit=500 → last 500 records
     """
     records = list(_telemetry_store)
-    sliced  = records[-limit:]
+    sliced  = records[-limit:]          # most-recent limit rows
 
     return {
         "total_stored": len(_telemetry_store),
@@ -349,7 +246,7 @@ async def latest_telemetry(
 
 # ── GET /telemetry/all ───────────────────────
 
-@app.get("/telemetry/all", summary="All Stored Telemetry Records")
+@app.get("/telemetry/all")
 async def all_telemetry():
     """Return every record currently in the in-memory store."""
     records = list(_telemetry_store)
@@ -362,7 +259,7 @@ async def all_telemetry():
 
 # ── GET /telemetry/count ─────────────────────
 
-@app.get("/telemetry/count", summary="Record Count (no payload)")
+@app.get("/telemetry/count")
 async def telemetry_count():
     """Return a lightweight record-count summary (no records payload)."""
     return {
@@ -373,7 +270,7 @@ async def telemetry_count():
 
 # ── GET /telemetry/{vehicle_id} ──────────────
 
-@app.get("/telemetry/{vehicle_id}", summary="Telemetry for a Specific Vehicle")
+@app.get("/telemetry/{vehicle_id}")
 async def vehicle_telemetry(vehicle_id: str):
     """Return all stored records for a specific vehicle_id."""
     matched = [

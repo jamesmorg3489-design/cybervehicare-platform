@@ -1,0 +1,11 @@
+.git
+__pycache__
+*.pyc
+.ipynb_checkpoints
+.DS_Store
+.env
+.venv
+venv
+node_modules
+docs/evidence
+benchmark/results

@@ -17,7 +17,6 @@ Fetches live data from:
 
 from __future__ import annotations
 
-import os
 import time
 from datetime import datetime, timezone
 from typing import Any
@@ -27,12 +26,6 @@ import plotly.express as px
 import plotly.graph_objects as go
 import requests
 import streamlit as st
-
-PREDICTION_API  = os.getenv("PREDICTION_API_URL",  "http://localhost:8000")
-TELEMETRY_API   = os.getenv("TELEMETRY_API_URL",   "http://localhost:8001")
-DIAGNOSTICS_API = os.getenv("DIAGNOSTICS_API_URL", "http://localhost:8002")
-ALERT_API       = os.getenv("ALERT_API_URL",       "http://localhost:8003")
-
 
 # ─────────────────────────────────────────────
 # PAGE CONFIG  (must be first Streamlit call)
@@ -50,10 +43,10 @@ st.set_page_config(
 # ─────────────────────────────────────────────
 
 SERVICES = {
-    "Prediction API":    {"url": PREDICTION_API, "health": "/health", "port": 8000},
-    "Telemetry Service": {"url": TELEMETRY_API, "health": "/health", "port": 8001},
-    "Diagnostics Svc":   {"url": DIAGNOSTICS_API, "health": "/health", "port": 8002},
-    "Alert Service":     {"url": ALERT_API, "health": "/health", "port": 8003},
+    "Prediction API":    {"url": "http://localhost:8000", "health": "/health", "port": 8000},
+    "Telemetry Service": {"url": "http://localhost:8001", "health": "/health", "port": 8001},
+    "Diagnostics Svc":   {"url": "http://localhost:8002", "health": "/health", "port": 8002},
+    "Alert Service":     {"url": "http://localhost:8003", "health": "/health", "port": 8003},
 }
 
 SEVERITY_COLOURS = {
@@ -73,10 +66,10 @@ TIMEOUT = 4   # seconds per API call
 
 # Data view mode → (label, telemetry URL)
 DATA_VIEW_MODES: dict[str, str] = {
-    "Latest 20":          f"{TELEMETRY_API}/telemetry/latest?limit=20",
-    "Latest 100":         f"{TELEMETRY_API}/telemetry/latest?limit=100",
-    "Latest 500":         f"{TELEMETRY_API}/telemetry/latest?limit=500",
-    "All stored records": f"{TELEMETRY_API}/telemetry/all",
+    "Latest 20":          "http://localhost:8001/telemetry/latest?limit=20",
+    "Latest 100":         "http://localhost:8001/telemetry/latest?limit=100",
+    "Latest 500":         "http://localhost:8001/telemetry/latest?limit=500",
+    "All stored records": "http://localhost:8001/telemetry/all",
 }
 
 # ─────────────────────────────────────────────
@@ -355,7 +348,7 @@ with st.spinner("Fetching live data from microservices…"):
         total_stored      = tel_data.get("total_stored", len(telemetry_records))
 
     # — Alerts —
-    alt_ok, alt_data = _get(f"{ALERT_API}/alerts")
+    alt_ok, alt_data = _get("http://localhost:8003/alerts")
     all_alerts: list[dict] = []
     if alt_ok and isinstance(alt_data, dict):
         all_alerts = alt_data.get("alerts", [])
@@ -752,8 +745,8 @@ with st.expander("🔧 API Reference & Test Commands", expanded=False):
         "curl http://localhost:8003/alerts | python3 -m json.tool\n\n"
         "# Latest telemetry (various limits)\n"
         "curl http://localhost:8001/telemetry/latest | python3 -m json.tool\n"
-        "curl f'{TELEMETRY_API}/telemetry/latest?limit=100' | python3 -m json.tool\n"
-        "curl f'{TELEMETRY_API}/telemetry/latest?limit=500' | python3 -m json.tool\n\n"
+        "curl 'http://localhost:8001/telemetry/latest?limit=100' | python3 -m json.tool\n"
+        "curl 'http://localhost:8001/telemetry/latest?limit=500' | python3 -m json.tool\n\n"
         "# All stored records\n"
         "curl http://localhost:8001/telemetry/all | python3 -m json.tool\n\n"
         "# Record count only\n"
